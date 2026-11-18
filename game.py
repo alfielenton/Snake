@@ -1,13 +1,12 @@
 import numpy as np
 from matplotlib import pyplot as plt
-import cv2
+from matplotlib import animation
 
 class Grid:
 
     def __init__(self, size, num_foods):
 
         self.size = size
-        self.grid = np.zeros((size, size))
         self.color_map = {0 : [0, 0, 255], 
                           -1 : [255, 0, 0], 
                           1 : [0, 255, 0]}
@@ -30,22 +29,19 @@ class Grid:
 
     def place_food(self, snake):
 
-        if len(self.foods) < self.num_foods:
-            curr_num_foods = len(self.foods)
-            while curr_num_foods < self.num_foods:
+        while len(self.foods) < self.num_foods:
 
-                food_placed = False
-                while not food_placed:
+            food_placed = False
+            while not food_placed:
 
-                    food = tuple(np.random.randint(0, self.grid.shape[0], 2).tolist())
-                    if food not in snake and food not in self.foods:
-                        curr_num_foods += 1
-                        self.foods.append(food)
-                        food_placed = True
-                    else:
-                        pass
+                food = tuple(np.random.randint(0, self.size, 2).tolist())
+                if food not in snake and food not in self.foods:
+                    self.foods.append(food)
+                    food_placed = True
+                else:
+                    pass
 
-    def display_grid(self, snake):
+    def display_grid(self, snake, show = True):
 
         self.build_grid(snake)
         h, w = self.grid.shape
@@ -54,9 +50,11 @@ class Grid:
         for num, rgb in self.color_map.items():
             rgb_image[self.grid == num] = rgb
 
-        plt.imshow(rgb_image)
-        plt.axis('on')
-        plt.show()
+        if show:
+            plt.imshow(rgb_image)
+            plt.axis('on')
+            plt.show()
+
         return rgb_image
 
 class Snake(Grid):
@@ -81,13 +79,15 @@ class Snake(Grid):
 
         snake = [tuple(self.snake["head"]["position"].tolist())]
         body_direction = self.snake["head"]["velocity"]
-        s = np.abs(body_direction[body_direction != 0])
+        s = np.abs(body_direction.sum())
         body_direction = -body_direction / s
 
         corner_reached = False
+        corners_taken = np.zeros(len(self.snake["corners"])).astype(np.bool).tolist()
+
         for _ in range(self.snake["length"] - 1):
 
-            curr_snake_pos = snake[-1]
+            curr_snake_pos = np.array(snake[-1])
 
             if corner_reached:
                 if turn_direction == "right":
@@ -96,7 +96,6 @@ class Snake(Grid):
                     body_direction = self.turn_right @ body_direction
 
             new_snake_pos = curr_snake_pos + body_direction
-            corners_taken = np.zeros(len(self.snake["corners"])).astype(np.bool).tolist()
             for corner, turn in self.snake["corners"]:
 
                 if corner == tuple(new_snake_pos.tolist()):
@@ -110,21 +109,26 @@ class Snake(Grid):
 
             snake.append(tuple(new_snake_pos.astype('i').tolist()))
 
+        new_corners = []
+        for corner, reach in zip(self.snake["corners"], corners_taken):
+            if reach:
+                new_corners.append(corner)
+
+        self.snake["corners"] = new_corners
+
         return snake
 
     def step(self, action):
 
         action = self.actions[int(action)]
         curr_snake_vel = self.snake["head"]["velocity"]
+        s = np.abs(curr_snake_vel.sum())
 
         if action == "forward":
-            s = np.abs(curr_snake_vel[curr_snake_vel != 0])[0]
             self.snake["head"]["velocity"] = self.snake["head"]["velocity"] + curr_snake_vel / s
             self.snake["head"]["velocity"] = self.snake["head"]["velocity"].astype("i")
 
         elif action == "back":
-            s = np.abs(curr_snake_vel[curr_snake_vel != 0])[0]
-
             if not (curr_snake_vel == 0).all():
                 curr_snake_vel = curr_snake_vel - curr_snake_vel / s
 
@@ -143,8 +147,7 @@ class Snake(Grid):
             pass
 
         curr_snake_vel = self.snake["head"]["velocity"]
-
-        s = np.abs(curr_snake_vel[curr_snake_vel != 0])[0]
+        s = np.abs(curr_snake_vel.sum())
         orig_head = self.snake["head"]["position"]
         curr_head = orig_head
 
@@ -160,8 +163,11 @@ class Snake(Grid):
                 reward += 10
 
             self.snake["head"]["position"] = curr_head
+            self.snake["head"]["velocity"] = curr_snake_vel / s
             curr_snake = self.build_snake()
+
             self.snake["head"]["position"] = orig_head
+            self.snake["head"]["velocity"] = curr_snake_vel
             if len(set(curr_snake)) < len(curr_snake):
                 terminal = True
                 reward -= 10
@@ -185,51 +191,59 @@ class Snake(Grid):
         return state, reward, terminal
 
 
-def record_video(frames, video_filename, frame_size, fps=30):
+## BELOW TESTS THAT THE ABOVE ENVIRONMENT WORKS WITH A RECORD FUNCTION TOO ##
+# snake = Snake(10, 5)
+# s = 0
+# terminal = False
+# frames = []
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_output = cv2.VideoWriter(video_filename, fourcc, fps, (frame_size, frame_size))
-    for frame in frames:
-        bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        video_output.write(bgr_frame)
+# while not terminal:
 
-    video_output.release()
+#     s += 1
+#     frame = snake.display_grid(snake.build_snake())
+#     frames.append(frame)
 
-snake = Snake(10, 5)
-s = 0
-terminal = False
-frames = []
+#     print("\nAvailable actions:")
+#     for i, action in enumerate(snake.actions):
+#         print(f"{i}: {action}")
+#     print("5: Terminate game")
 
-while not terminal:
+#     action = input("\nChoose an action: ")
+#     if int(action) == 5:
+#         break
+#     state, reward, terminal = snake.step(action)
+#     snake_body, head_vel, foods = state
 
-    s += 1
-    frame = snake.display_grid(snake.build_snake())
-    frames.append(frame)
+#     print("State: ")
+#     print("\n\tSnake: ")
+#     for body in snake_body:
+#         print(f"\t{body}")
+#     print("\n\n\tFood:")
+#     for food in foods:
+#         print(f"\t{food}")
+#     print(f"\n\tHead velocity: {head_vel}")
+#     print(f"\nReward: {reward}")
+#     print(f"Terminal: {terminal}")
+#     print(f"Steps taken: {s}")
 
-    print("\nAvailable actions:")
-    for i, action in enumerate(snake.actions):
-        print(f"{i}: {action}")
-    print("5: Terminate game")
+#     if terminal:
+#         print("Game finished")
+#         frames.append(snake.display_grid(snake.build_snake()))
 
-    action = input("\nChoose an action: ")
-    if int(action) == 5:
-        break
-    state, reward, terminal = snake.step(action)
-    snake_body, head_vel, foods = state
+# fig, ax = plt.subplots()
+# ax.axis("off")
 
-    print("State: ")
-    print("\n\tSnake: ")
-    for body in snake_body:
-        print(f"\t{body}")
-    print("\n\n\tFood:")
-    for food in foods:
-        print(f"\t{food}")
-    print(f"\n\tHead velocity: {head_vel}")
-    print(f"\nReward: {reward}")
-    print(f"Terminal: {terminal}")
-    print(f"Steps taken: {s + 1}")
+# im = ax.imshow(frames[0])
 
-    if terminal:
-        print("Game finished")
+# def update(frame_idx):
 
-record_video(frames, "game_recording.mp4", snake.size)
+#     im.set_data(frames[frame_idx])
+#     return [im]
+
+# ani = animation.FuncAnimation(fig, update, frames=len(frames), interval=33, blit=True)
+
+# video_name = "snakeplay_video.gif"
+# fps = 15
+
+# writer = animation.PillowWriter(fps=fps)
+# ani.save(video_name, writer=writer)
