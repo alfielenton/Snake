@@ -118,6 +118,14 @@ class Snake(Grid):
 
         return snake
 
+    def initial_state(self):
+
+        snake = self.build_snake()
+        velocity = self.snake["head"]["velocity"]
+        foods = self.foods
+        state = (snake, velocity.tolist(), foods)
+        return state
+    
     def step(self, action):
 
         action = self.actions[int(action)]
@@ -129,7 +137,7 @@ class Snake(Grid):
             self.snake["head"]["velocity"] = self.snake["head"]["velocity"].astype("i")
 
         elif action == "back":
-            if not (curr_snake_vel == 0).all():
+            if not s == 1:
                 curr_snake_vel = curr_snake_vel - curr_snake_vel / s
 
             self.snake["head"]["velocity"] = curr_snake_vel
@@ -152,15 +160,18 @@ class Snake(Grid):
         curr_head = orig_head
 
         reward = 0
+        score = 0
+        terminal = False
+
         for _ in range(int(s)):
 
-            terminal = False
             curr_head = curr_head + curr_snake_vel / s
             if tuple(curr_head.tolist()) in self.foods:
 
                 self.foods.remove(tuple(curr_head.tolist()))
                 self.snake["length"] += 1
                 reward += 10
+                score += 10
 
             self.snake["head"]["position"] = curr_head
             self.snake["head"]["velocity"] = curr_snake_vel / s
@@ -182,68 +193,10 @@ class Snake(Grid):
             else:
                 terminal = False
 
-        reward -= .1
+        reward -= .01
         snake = self.build_snake()
         head_vel = self.snake["head"]["velocity"].tolist()
         self.place_food(snake)
 
         state = (snake, head_vel, self.foods)
-        return state, reward, terminal
-
-
-## BELOW TESTS THAT THE ABOVE ENVIRONMENT WORKS WITH A RECORD FUNCTION TOO ##
-# snake = Snake(10, 5)
-# s = 0
-# terminal = False
-# frames = []
-
-# while not terminal:
-
-#     s += 1
-#     frame = snake.display_grid(snake.build_snake())
-#     frames.append(frame)
-
-#     print("\nAvailable actions:")
-#     for i, action in enumerate(snake.actions):
-#         print(f"{i}: {action}")
-#     print("5: Terminate game")
-
-#     action = input("\nChoose an action: ")
-#     if int(action) == 5:
-#         break
-#     state, reward, terminal = snake.step(action)
-#     snake_body, head_vel, foods = state
-
-#     print("State: ")
-#     print("\n\tSnake: ")
-#     for body in snake_body:
-#         print(f"\t{body}")
-#     print("\n\n\tFood:")
-#     for food in foods:
-#         print(f"\t{food}")
-#     print(f"\n\tHead velocity: {head_vel}")
-#     print(f"\nReward: {reward}")
-#     print(f"Terminal: {terminal}")
-#     print(f"Steps taken: {s}")
-
-#     if terminal:
-#         print("Game finished")
-#         frames.append(snake.display_grid(snake.build_snake()))
-
-# fig, ax = plt.subplots()
-# ax.axis("off")
-
-# im = ax.imshow(frames[0])
-
-# def update(frame_idx):
-
-#     im.set_data(frames[frame_idx])
-#     return [im]
-
-# ani = animation.FuncAnimation(fig, update, frames=len(frames), interval=33, blit=True)
-
-# video_name = "snakeplay_video.gif"
-# fps = 15
-
-# writer = animation.PillowWriter(fps=fps)
-# ani.save(video_name, writer=writer)
+        return state, reward, score, terminal
